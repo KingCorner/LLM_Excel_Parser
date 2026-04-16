@@ -1,0 +1,22 @@
+# 虚拟环境 (针对你图中的 .venv)
+.venv/
+env/
+venv/
+ENV/
+
+# Python 缓存和字节码文件夹
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE 配置文件 (比如 PyCharm 或 VSCode)
+.idea/
+.vscode/
+
+# 环境变量文件 (如果你后续用了 .env 存放 LLM 的 API Key，千万别传上去！！！)
+.env
+
+# uv 等打包构建产生的目录
+build/
+dist/
+*.egg-info/
