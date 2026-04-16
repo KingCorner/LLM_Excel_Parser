@@ -70,3 +70,15 @@ def merge_proximate_boxes(boxes: List[BoundingBox], max_empty_rows: int, max_emp
     # 按从上到下，从左到右排序返回
     boxes.sort(key=lambda b: (b.min_row, b.min_col))
     return boxes
+
+
+def col_idx_to_letter(col_idx: int) -> str:
+    """
+    纯 Python 实现列索引转字母 (脱离 openpyxl 依赖)
+    1 -> A, 26 -> Z, 27 -> AA
+    """
+    letter = ""
+    while col_idx > 0:
+        col_idx, remainder = divmod(col_idx - 1, 26)
+        letter = chr(65 + remainder) + letter
+    return letter
