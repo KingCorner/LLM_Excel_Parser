@@ -8,6 +8,7 @@ from typing import List, Set, Tuple
 from llm_excel_parser.utils.logger_module import get_logger
 from llm_excel_parser.core.datatypes import BoundingBox
 from llm_excel_parser.config import default_config
+from llm_excel_parser.core.interfaces import BaseWorksheet
 # 引入解耦出的底层算法
 from llm_excel_parser.utils.matrix_algo import find_8_connected_components, merge_proximate_boxes
 
@@ -23,10 +24,10 @@ class StructureDetector:
         核心切表编排逻辑：映射布尔矩阵 -> 连通域探测(调用算法层) -> 膨胀合并(调用算法层)
         返回单张Sheet中的多个独立表格区域 (BoundingBox)
         """
-        max_row = ws.max_row
-        max_col = ws.max_column
 
-        if max_row == 0 or max_col == 0 or (max_row == 1 and max_col == 1 and ws.cell(1, 1).value is None):
+        max_row, max_col = ws.max_dimensions
+
+        if max_row == 0 or max_col == 0 or (max_row == 1 and max_col == 1 and ws.get_cell_value(1, 1) is None):
             logger.debug(f"Sheet '{ws.title}' 为空，跳过切分。")
             return []
 
@@ -54,15 +55,15 @@ class StructureDetector:
 
         # 1. 扫描值
         for row_idx, row in enumerate(
-                ws.iter_rows(min_row=1, max_row=max_row, min_col=1, max_col=max_col, values_only=True), 1):
+                ws.iter_rows(min_row=1, max_row=max_row, min_col=1, max_col=max_col), 1):
             for col_idx, val in enumerate(row, 1):
                 if val is not None and str(val).strip() != "":
                     solid_cells.add((row_idx, col_idx))
 
         # 2. 合并单元格修补
-        for merged_range in ws.merged_cells.ranges:
-            for r in range(merged_range.min_row, merged_range.max_row + 1):
-                for c in range(merged_range.min_col, merged_range.max_col + 1):
+        for min_row, min_col, max_row, max_col in ws.get_merged_regions():
+            for r in range(min_row, max_row + 1):
+                for c in range(min_col, max_col + 1):
                     solid_cells.add((r, c))
 
         return solid_cells

@@ -13,6 +13,8 @@ from llm_excel_parser.utils.formatters import format_cell_value
 from llm_excel_parser.strategies.unmerge import get_unmerge_strategy
 from llm_excel_parser.utils.matrix_algo import col_idx_to_letter
 
+from llm_excel_parser.core.interfaces import BaseWorksheet
+
 logger = get_logger("phase3_renderer")
 
 
@@ -34,42 +36,34 @@ class DataRenderer:
             # 1. 预计算可见行/列
             visible_rows = []
             for r in range(box.min_row, box.max_row + 1):
-                if ignore_hidden and hasattr(ws, 'row_dimensions') and r in ws.row_dimensions and ws.row_dimensions[
-                    r].hidden:
+                if ignore_hidden and ws.is_row_hidden(r):
                     continue
                 visible_rows.append(r)
-
             visible_cols = []
             for c in range(box.min_col, box.max_col + 1):
-                col_letter = col_idx_to_letter(c)
-                if ignore_hidden and hasattr(ws, 'column_dimensions') and col_letter in ws.column_dimensions and \
-                        ws.column_dimensions[col_letter].hidden:
+                if ignore_hidden and ws.is_col_hidden(c):
                     continue
                 visible_cols.append(c)
-
             if not visible_rows or not visible_cols:
                 return []
 
             # 2. 从全局合并单元格中，过滤出仅在这个 Box 内产生交集的拓扑关系
             merged_dict: Dict[Tuple[int, int], Dict[str, Any]] = {}
-            if hasattr(ws, 'merged_cells'):
-                for merged_range in ws.merged_cells.ranges:
-                    min_col, min_row, max_col, max_row = merged_range.bounds
+            for min_row, min_col, max_row, max_col in ws.get_merged_regions():
+                # 矩阵碰撞检测
+                if max_col < box.min_col or min_col > box.max_col or \
+                        max_row < box.min_row or min_row > box.max_row:
+                    continue
 
-                    # 矩阵碰撞检测: 跳过无交集的范围
-                    if max_col < box.min_col or min_col > box.max_col or \
-                            max_row < box.min_row or min_row > box.max_row:
-                        continue
+                # 提取主格原值
+                master_val = format_cell_value(ws.get_cell_value(min_row, min_col))
 
-                    # 提取该合并区域的主格原值 (左上角)
-                    master_val = format_cell_value(ws.cell(row=min_row, column=min_col).value)
-
-                    for r in range(max(min_row, box.min_row), min(max_row, box.max_row) + 1):
-                        for c in range(max(min_col, box.min_col), min(max_col, box.max_col) + 1):
-                            merged_dict[(r, c)] = {
-                                "master_val": master_val,
-                                "is_top_left": (r == min_row and c == min_col)
-                            }
+                for r in range(max(min_row, box.min_row), min(max_row, box.max_row) + 1):
+                    for c in range(max(min_col, box.min_col), min(max_col, box.max_col) + 1):
+                        merged_dict[(r, c)] = {
+                            "master_val": master_val,
+                            "is_top_left": (r == min_row and c == min_col)
+                        }
 
             # 3. 动态获取解码策略工厂方法，移除 if-else
             strategy = get_unmerge_strategy(action)
@@ -80,7 +74,7 @@ class DataRenderer:
             for r in visible_rows:
                 row_data = []
                 for c in visible_cols:
-                    raw_val = ws.cell(row=r, column=c).value
+                    raw_val = ws.get_cell_value(r, c)
                     formatted_val = format_cell_value(raw_val)
                     final_val = formatted_val
 
