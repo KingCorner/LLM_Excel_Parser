@@ -204,31 +204,30 @@ class SecureLoader:
     """
 
     @classmethod
-    def check_dimensions_and_route(cls, source: InputType, config_params: dict = None):
+    def check_dimensions_and_route(cls, source: InputType,
+                                   config_params: dict = None) -> list:
         config_params = config_params or {}
-
-        # 从全局配置取默认兜底值
         max_rows = config_params.get("max_rows", default_config.MAX_ROW_LIMIT)
         max_cols = config_params.get("max_cols", default_config.MAX_COL_LIMIT)
         include_hidden = config_params.get("include_hidden_rows", False)
-
-        # 1. 归一化并嗅探
         fmt, file_obj = FileFormatSniffer.detect_and_normalize(source)
         if fmt == ExcelFormat.UNKNOWN:
             raise UnsupportedFormatError("未知的表格格式，仅支持xls和xlsx(以及二进制流)")
-
-        # 2. 维度阻断
         if fmt == ExcelFormat.XLSX:
             DimensionChecker.check_xlsx(file_obj, max_rows, max_cols)
         else:
             DimensionChecker.check_xls(file_obj, max_rows, max_cols)
-
-        # 3. 路由加载
         file_obj.seek(0)
+
+        # 路由加载引擎
+        wb_obj = None
         if fmt == ExcelFormat.XLSX:
             from openpyxl import load_workbook
             logger.info("启动 XLSX 驱动...")
-            return load_workbook(file_obj, data_only=True)
+            wb_obj = load_workbook(file_obj, data_only=True)
         else:
             logger.info("启动 XLS 内存转换流水线...")
-            return XlsToXlsxConverter.convert_in_memory(file_obj.read(), include_hidden)
+            wb_obj = XlsToXlsxConverter.convert_in_memory(file_obj.read(), include_hidden)
+        # 不再对外返回openpyxl对象, 而是返回BaseWorksheet数组
+        from llm_excel_parser.adapters.openpyxl_adapter import OpenpyxlWorksheetAdapter
+        return [OpenpyxlWorksheetAdapter(sheet) for sheet in wb_obj.worksheets]
