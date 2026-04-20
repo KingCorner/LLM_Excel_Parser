@@ -42,12 +42,12 @@ class HeaderAnalyzer:
 
         # LLM 兜底分析
         if use_llm_layout_analyzer and llm_service:
-            scan_indices = sorted_row_indices[:default_config.LLM_SCAN_ROW_LIMIT]
+            scan_indices = sorted_row_indices[:default_config.HEADER_LLM_SCAN_ROW_LIMIT]
             header_boundary_idx = cls._llm_scoring(rows_dict, scan_indices, max_col, llm_service)
 
         # 启发式分析 (LLM未开启或失败时)
         if header_boundary_idx == 0:
-            scan_indices = sorted_row_indices[:default_config.SCAN_ROW_LIMIT]
+            scan_indices = sorted_row_indices[:default_config.HEADER_SCAN_ROW_LIMIT]
             header_boundary_idx = cls._heuristic_scoring(rows_dict, scan_indices, max_col, custom_header_keywords)
 
         # 3. 数据组装并返回
@@ -76,14 +76,14 @@ class HeaderAnalyzer:
             non_empty_count = sum(
                 1 for c in range(1, max_col + 1) if str(current_row.get(c, {}).get("value", "")).strip())
             density = non_empty_count / max_col if max_col > 0 else 0
-            if density > default_config.DENSITY_THRESHOLD:
-                score += default_config.WEIGHT_DENSITY_HIGH
+            if density > default_config.HEADER_DENSITY_THRESHOLD:
+                score += default_config.HEADER_WEIGHT_DENSITY_HIGH
 
             # 2. 关键字特征
             if custom_header_keywords:
                 row_strs = [str(current_row.get(c, {}).get("value", "")).lower() for c in range(1, max_col + 1)]
                 match_count = sum(1 for kw in custom_header_keywords if any(kw.lower() in v for v in row_strs))
-                score += default_config.WEIGHT_KEYWORD_MATCH * match_count
+                score += default_config.HEADER_WEIGHT_KEYWORD_MATCH * match_count
 
             # 3. 与下一行的突变特征对比
             if i + 1 < len(scan_indices):
@@ -97,7 +97,7 @@ class HeaderAnalyzer:
                     isinstance(next_row.get(c, {}).get("value", ""), (int, float)) for c in range(1, max_col + 1) if
                     next_row.get(c))
                 if curr_is_str and next_has_num:
-                    score += default_config.WEIGHT_TYPE_MUTATION
+                    score += default_config.HEADER_WEIGHT_TYPE_MUTATION
 
                 # 样式突变
                 curr_spec = any(
@@ -108,13 +108,13 @@ class HeaderAnalyzer:
                     next_row.get(c, {}).get("style", {}).get("is_bold") or next_row.get(c, {}).get("style", {}).get(
                         "has_bg") for c in range(1, max_col + 1))
                 if curr_spec and not next_spec:
-                    score += default_config.WEIGHT_STYLE_MUTATION
+                    score += default_config.HEADER_WEIGHT_STYLE_MUTATION
 
             scores[r_idx] = score
 
         if scores:
             best_row, highest_score = max(scores.items(), key=lambda x: x[1])
-            if highest_score >= default_config.MIN_SCORE_THRESHOLD:
+            if highest_score >= default_config.HEADER_MIN_SCORE_THRESHOLD:
                 return best_row
 
         return scan_indices[0]  # 兜底返回第一行
