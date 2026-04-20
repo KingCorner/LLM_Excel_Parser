@@ -45,19 +45,27 @@ def find_8_connected_components(solid_cells: Set[Tuple[int, int]]) -> List[Bound
 def merge_proximate_boxes(boxes: List[BoundingBox], max_empty_rows: int, max_empty_cols: int) -> List[BoundingBox]:
     """基于容忍距离，合并距离相近的包围盒 (宏观合并)"""
     merged = True
+
+    # 在离散网格中，跨越 N 个空隙产生交集，需要延展 N + 1
+    expand_r = max_empty_rows + 1
+    expand_c = max_empty_cols + 1
+
     while merged:
         merged = False
         new_boxes = []
 
         while boxes:
             current_box = boxes.pop(0)
-            expanded_current = current_box.expand(max_empty_rows, max_empty_cols)
+
+            # 使用修正后的延展距离
+            expanded_current = current_box.expand(expand_r, expand_c)
 
             boxes_to_keep = []
             for other_box in boxes:
                 if expanded_current.intersects(other_box):
                     current_box = current_box.merge(other_box)
-                    expanded_current = current_box.expand(max_empty_rows, max_empty_cols)
+                    # 合并后产生的新大盒子，也要使用修正后的延展距离重新计算
+                    expanded_current = current_box.expand(expand_r, expand_c)
                     merged = True
                 else:
                     boxes_to_keep.append(other_box)
