@@ -13,7 +13,6 @@ from llm_excel_parser.utils.formatters import format_cell_value
 from llm_excel_parser.strategies.unmerge import get_unmerge_strategy
 from llm_excel_parser.utils.matrix_algo import col_idx_to_letter
 
-from llm_excel_parser.core.interfaces import BaseWorksheet
 
 logger = get_logger("phase3_renderer")
 
