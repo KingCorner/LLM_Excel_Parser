@@ -8,7 +8,6 @@ from typing import List, Set, Tuple
 from llm_excel_parser.utils.logger_module import get_logger
 from llm_excel_parser.core.datatypes import BoundingBox
 from llm_excel_parser.config import default_config
-from llm_excel_parser.core.interfaces import BaseWorksheet
 # 引入解耦出的底层算法
 from llm_excel_parser.utils.matrix_algo import find_8_connected_components, merge_proximate_boxes
 
