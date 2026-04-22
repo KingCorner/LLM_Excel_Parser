@@ -9,9 +9,16 @@ import datetime
 import io
 from typing import Union, BinaryIO, Tuple
 from llm_excel_parser.utils.logger_module import get_logger
-from llm_excel_parser.core.exceptions import OverDimensionError, UnsupportedFormatError
 from llm_excel_parser.core.enums import ExcelFormat
 from llm_excel_parser.config import default_config
+from llm_excel_parser.core.exceptions import (
+    ExcelParserBaseException,
+    OverDimensionError,
+    UnsupportedFormatError,
+    InvalidInputTypeError,
+    MissingDependencyError,
+    FileCorruptedError
+)
 
 logger = get_logger("phase1_loader")
 InputType = Union[str, bytes, BinaryIO]
@@ -31,7 +38,7 @@ class FileFormatSniffer:
         elif hasattr(source, 'read'):
             file_obj = source
         else:
-            raise TypeError("不受支持的输入类型，应为 str(路径), bytes 或 BytesIO")
+            raise InvalidInputTypeError("不受支持的输入类型，应为 str(路径), bytes 或 BytesIO")
 
         file_obj.seek(0)
         magic_number = file_obj.read(8)
@@ -113,12 +120,13 @@ class XlsToXlsxConverter:
             import xlrd
             from openpyxl import Workbook
         except ImportError as e:
-            raise ImportError("处理 .xls 文件需要同时安装 'xlrd' 和 'openpyxl'") from e
+            raise MissingDependencyError(
+                "处理 .xls 文件需要同时安装 'xlrd' 和 'openpyxl' (pip install xlrd openpyxl)") from e
 
         try:
             xls_workbook = xlrd.open_workbook(file_contents=file_contents, formatting_info=True)
         except Exception as e:
-            raise RuntimeError(f"xlrd 无法读取 XLS 文件, 可能已损坏: {e}")
+            raise FileCorruptedError(f"底层引擎(xlrd)无法读取 XLS 文件, 可能已损坏或加密: {e}") from e
 
         mem_wb = Workbook()
         if mem_wb.worksheets:
@@ -221,13 +229,20 @@ class SecureLoader:
 
         # 路由加载引擎
         wb_obj = None
-        if fmt == ExcelFormat.XLSX:
-            from openpyxl import load_workbook
-            logger.info("启动 XLSX 驱动...")
-            wb_obj = load_workbook(file_obj, data_only=True)
-        else:
-            logger.info("启动 XLS 内存转换流水线...")
-            wb_obj = XlsToXlsxConverter.convert_in_memory(file_obj.read(), include_hidden)
+        try:
+            if fmt == ExcelFormat.XLSX:
+                from openpyxl import load_workbook
+                logger.info("启动 XLSX 驱动...")
+                wb_obj = load_workbook(file_obj, data_only=True)
+            else:
+                logger.info("启动 XLS 内存转换流水线...")
+                wb_obj = XlsToXlsxConverter.convert_in_memory(file_obj.read(), include_hidden)
+        except ExcelParserBaseException:
+            # 如果是自己定义的异常，直接上抛
+            raise
+        except Exception as e:
+            # 门面模式的防漏处理：兜底第三方引擎自身的异常 (如 zipfile.BadZipFile, openpyxl的各种解析报错)
+            raise FileCorruptedError(f"文件加载失败，无法解析底层工作簿: {str(e)}") from e
         # 不再对外返回openpyxl对象, 而是返回BaseWorksheet数组
         from llm_excel_parser.adapters.openpyxl_adapter import OpenpyxlWorksheetAdapter
         return [OpenpyxlWorksheetAdapter(sheet) for sheet in wb_obj.worksheets]
