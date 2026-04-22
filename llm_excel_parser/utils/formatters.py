@@ -3,8 +3,10 @@
 #   @Time:     2026/4/14 21:58
 #   @FileRole: 基础格式化
 
+import math
 import datetime
 from typing import Any, Dict, List
+from llm_excel_parser.core.datatypes import StructuredTable
 
 
 def format_cell_value(value: Any) -> Any:
@@ -67,3 +69,49 @@ def rows_dict_to_markdown_table(rows_dict: Dict[int, Dict[int, Any]], scan_indic
         md_lines.append(f"{r_idx} | " + " | ".join(row_vals) + " |")
 
     return "\n".join(md_lines)
+
+
+def render_chunk_header(table: StructuredTable) -> tuple[str, int]:
+    """渲染表头区并返回字符串及基础Token占用"""
+    if not table.headers:
+        return "表头 | (无表头数据)", 5
+    header_str_lines = []
+    for h in table.headers:
+        h_data = h["data"]
+        row_items = [str(h_data.get(c, "")) for c in range(1, table.max_col + 1)]
+        header_str_lines.append("表头 | " + " | ".join(row_items))
+    final_header_str = "\n".join(header_str_lines)
+    base_tokens = math.ceil(len(final_header_str) * 0.5) + 50
+    return final_header_str, base_tokens
+
+
+def render_chunk_row(row_record: Dict, max_col: int) -> str:
+    """渲染带有逻辑行号的单行数据"""
+    r_idx = row_record["row"]
+    r_data = row_record["data"]
+    # 替换其中的换行等可能破坏Markdown表格的字符
+    row_vals = [str(r_data.get(c, "")).replace("\n", " ").replace("|", "｜") for c in range(1, max_col + 1)]
+    return f"行{r_idx} | " + " | ".join(row_vals)
+
+
+def build_chunk_context(
+        table: StructuredTable,
+        batch: List[Dict],
+        header_str: str,
+        current_chunk_idx: int,
+        total_chunks: int
+) -> str:
+    """将数据拼接为 LLM 友好的 Markdown/CSV 格式"""
+    start_row = batch[0]["row"]
+    end_row = batch[-1]["row"]
+    context_parts = [
+        f"=== 电子表格数据片段 ({current_chunk_idx}/{total_chunks}) ===",
+        f"📌 文件名: {table.filename} | 工作表: {table.sheetname}",
+        f"📌 行号范围: {start_row} ~ {end_row}",
+        "-" * 50,
+        header_str,  # 每一块均带上表头
+        "-" * 50
+    ]
+    for row_record in batch:
+        context_parts.append(render_chunk_row(row_record, table.max_col))
+    return "\n".join(context_parts)
