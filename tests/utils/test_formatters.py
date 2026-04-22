@@ -6,9 +6,14 @@
 
 import datetime
 import pytest
-
-# 导入需要测试的函数
-from llm_excel_parser.utils.formatters import format_cell_value, rows_dict_to_markdown_table
+from unittest.mock import Mock
+from llm_excel_parser.utils.formatters import (
+    format_cell_value,
+    rows_dict_to_markdown_table,
+    render_chunk_header,
+    render_chunk_row,
+    build_chunk_context
+)
 
 
 class TestFormatCellValue:
@@ -104,3 +109,67 @@ class TestRowsDictToMarkdownTable:
         expected = "1 | Hello ｜ World |"
         result = rows_dict_to_markdown_table(rows_dict, scan_indices, max_col)
         assert result == expected
+
+
+class TestPhase5Formatters:
+    """针对 Phase 5 新增渲染逻辑的单元测试"""
+
+    def test_render_chunk_header_normal(self):
+        """正常表头的渲染与估算"""
+        mock_table = Mock()
+        mock_table.max_col = 2
+        mock_table.headers = [
+            {"row": 1, "data": {1: "ID", 2: "Name"}}
+        ]
+
+        header_str, base_tokens = render_chunk_header(mock_table)
+        assert header_str == "表头 | ID | Name"
+        # 字符长度 14 -> 7 tokens + 50 基础预留 = 57
+        assert base_tokens == 57
+
+    def test_render_chunk_header_empty(self):
+        """无表头时的降级处理"""
+        mock_table = Mock()
+        mock_table.headers = []
+
+        header_str, base_tokens = render_chunk_header(mock_table)
+        assert header_str == "表头 | (无表头数据)"
+        assert base_tokens == 5
+
+    def test_render_chunk_row(self):
+        """单行数据渲染及破坏字符替换"""
+        row_record = {
+            "row": 5,
+            "data": {1: "Hello\nWorld", 2: "A|B"}
+        }
+        res = render_chunk_row(row_record, max_col=2)
+        # \n 被替换为空格，| 被替换为全角 ｜
+        assert res == "行5 | Hello World | A｜B"
+
+    def test_build_chunk_context(self):
+        """整体 Markdown 上下文组装测试"""
+        mock_table = Mock()
+        mock_table.filename = "test.xlsx"
+        mock_table.sheetname = "Sheet1"
+        mock_table.max_col = 1
+
+        batch = [
+            {"row": 10, "data": {1: "Row10"}},
+            {"row": 11, "data": {1: "Row11"}}
+        ]
+
+        context = build_chunk_context(
+            table=mock_table,
+            batch=batch,
+            header_str="表头 | Data",
+            current_chunk_idx=1,
+            total_chunks=3
+        )
+
+        # 验证必需的上下文提示词都在
+        assert "=== 电子表格数据片段 (1/3) ===" in context
+        assert "文件名: test.xlsx" in context
+        assert "行号范围: 10 ~ 11" in context
+        assert "表头 | Data" in context
+        assert "行10 | Row10" in context
+        assert "行11 | Row11" in context
