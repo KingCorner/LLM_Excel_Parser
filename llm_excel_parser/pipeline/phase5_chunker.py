@@ -8,6 +8,7 @@ import math
 from typing import List, Literal
 from llm_excel_parser.utils.logger_module import get_logger
 from llm_excel_parser.core.datatypes import StructuredTable, ExcelChunk
+from llm_excel_parser.core.exceptions import ChunkingError
 from llm_excel_parser.strategies.chunking import CHUNKER_REGISTRY
 from llm_excel_parser.utils.formatters import render_chunk_header, build_chunk_context
 
@@ -40,7 +41,7 @@ class ChunkAssembler:
 
         # 2. 路由到指定策略执行切片运算 (依赖 strategies 层)
         if strategy not in CHUNKER_REGISTRY:
-            raise ValueError(f"不受支持的切片策略: {strategy}")
+            raise ChunkingError(f"不受支持的切片策略: {strategy}")
 
         # 根据选择实例化对应的 Chunker，并将对应的参数带入
         if strategy == "fixed_row":

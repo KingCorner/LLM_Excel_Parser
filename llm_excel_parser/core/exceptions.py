@@ -48,3 +48,8 @@ class DataRenderError(ExcelParserBaseException):
 class HeaderAnalysisError(ExcelParserBaseException):
     """(Phase 4) 表头智能识别异/分析常"""
     pass
+
+
+class ChunkingError(ExcelParserBaseException, ValueError):
+    """(Phase 5) 切片策略配置或执行异常"""
+    pass
