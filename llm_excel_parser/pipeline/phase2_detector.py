@@ -7,6 +7,7 @@
 from typing import List, Set, Tuple
 from llm_excel_parser.utils.logger_module import get_logger
 from llm_excel_parser.core.datatypes import BoundingBox
+from llm_excel_parser.core.exceptions import StructureDetectionError
 from llm_excel_parser.config import default_config
 # 引入解耦出的底层算法
 from llm_excel_parser.utils.matrix_algo import find_8_connected_components, merge_proximate_boxes
@@ -24,28 +25,35 @@ class StructureDetector:
         返回单张Sheet中的多个独立表格区域 (BoundingBox)
         """
 
-        max_row, max_col = ws.max_dimensions
+        try:
+            max_row, max_col = ws.max_dimensions
 
-        if max_row == 0 or max_col == 0 or (max_row == 1 and max_col == 1 and ws.get_cell_value(1, 1) is None):
-            logger.debug(f"Sheet '{ws.title}' 为空，跳过切分。")
-            return []
+            if max_row == 0 or max_col == 0 or (max_row == 1 and max_col == 1 and ws.get_cell_value(1, 1) is None):
+                logger.debug(f"Sheet '{ws.title}' 为空，跳过切分。")
+                return []
 
-        # 步骤 1 & 2: 构建稀疏布尔矩阵并进行合并格修补 (强依赖 ws 业务逻辑，保留在此处)
-        solid_cells = cls._build_boolean_matrix(ws, max_row, max_col)
-        if not solid_cells:
-            return []
+            # 步骤 1 & 2: 构建稀疏布尔矩阵并进行合并格修补 (强依赖 ws 业务逻辑，保留在此处)
+            solid_cells = cls._build_boolean_matrix(ws, max_row, max_col)
+            if not solid_cells:
+                return []
 
-        # 步骤 3: 微观连通域聚类 (调用底层算法解耦)
-        micro_boxes = find_8_connected_components(solid_cells)
+            # 步骤 3: 微观连通域聚类 (调用底层算法解耦)
+            micro_boxes = find_8_connected_components(solid_cells)
 
-        # 步骤 4: 宏观合并 (消除连续空行/空列带来的断层，调用底层算法)
-        final_boxes = merge_proximate_boxes(micro_boxes, max_empty_rows, max_empty_cols)
+            # 步骤 4: 宏观合并 (消除连续空行/空列带来的断层，调用底层算法)
+            final_boxes = merge_proximate_boxes(micro_boxes, max_empty_rows, max_empty_cols)
 
-        logger.info(f"Sheet '{ws.title}' 结构探测完成, 发现 {len(final_boxes)} 个独立表格块。")
-        for i, box in enumerate(final_boxes):
-            logger.debug(f"  Box {i + 1}: R{box.min_row}:R{box.max_row}, C{box.min_col}:C{box.max_col}")
+            logger.info(f"Sheet '{ws.title}' 结构探测完成, 发现 {len(final_boxes)} 个独立表格块。")
+            for i, box in enumerate(final_boxes):
+                logger.debug(f"  Box {i + 1}: R{box.min_row}:R{box.max_row}, C{box.min_col}:C{box.max_col}")
 
-        return final_boxes
+            return final_boxes
+
+        except StructureDetectionError:
+            raise
+        except Exception as e:
+            logger.error(f"Sheet '{ws.title}' 结构探测失败! Error: {str(e)}")
+            raise StructureDetectionError(f"Phase 2 结构探测异常: Sheet '{ws.title}' 探测失败. 具体原因: {str(e)}") from e
 
     @staticmethod
     def _build_boolean_matrix(ws, max_row: int, max_col: int) -> Set[Tuple[int, int]]:
