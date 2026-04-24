@@ -3,7 +3,10 @@
 #   @Time:     2026/4/16 17:37
 #   @FileRole: 核心接口定义
 
-from typing import Protocol, Any, Dict, Tuple, List, Iterator
+from typing import Protocol, Any, Dict, Tuple, List, Iterator, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from llm_excel_parser.core.datatypes import CellStyle
 from abc import ABC, abstractmethod
 
 
@@ -64,4 +67,9 @@ class BaseWorksheet(ABC):
     @abstractmethod
     def is_col_hidden(self, col: int) -> bool:
         """判断某一列是否被隐藏"""
+        pass
+
+    @abstractmethod
+    def get_cell_style(self, row: int, col: int) -> 'CellStyle':
+        """获取指定单元格的样式特征，返回 CellStyle 字典 (1-based)"""
         pass

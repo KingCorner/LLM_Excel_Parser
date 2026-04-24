@@ -6,6 +6,7 @@
 
 from typing import Any, Tuple, List, Iterator
 from llm_excel_parser.core.interfaces import BaseWorksheet
+from llm_excel_parser.core.datatypes import CellStyle
 from llm_excel_parser.utils.matrix_algo import col_idx_to_letter
 
 
@@ -50,3 +51,23 @@ class OpenpyxlWorksheetAdapter(BaseWorksheet):
             return False
         col_letter = col_idx_to_letter(col)
         return col_letter in self._ws.column_dimensions and self._ws.column_dimensions[col_letter].hidden
+
+    def get_cell_style(self, row: int, col: int) -> CellStyle:
+        cell = self._ws.cell(row=row, column=col)
+        style: CellStyle = {}
+        try:
+            if cell.font and cell.font.bold:
+                style['is_bold'] = True
+        except Exception:
+            pass
+        try:
+            fill = cell.fill
+            if fill and fill.fill_type not in (None, 'none') and fill.fgColor:
+                color = fill.fgColor
+                # rgb 为 "00000000" 时表示无填充
+                rgb = getattr(color, 'rgb', None)
+                if rgb and rgb != '00000000':
+                    style['has_bg'] = True
+        except Exception:
+            pass
+        return style
