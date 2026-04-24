@@ -7,7 +7,7 @@ import os
 from typing import Union, BinaryIO, Optional, List, Any
 
 from llm_excel_parser.utils.logger_module import get_logger
-from llm_excel_parser.core.enums import MergeAction
+from llm_excel_parser.core.enums import MergeAction, ChunkStrategy
 from llm_excel_parser.core.datatypes import ExcelChunk, CellData, BoundingBox
 from llm_excel_parser.core.interfaces import BaseWorksheet
 
@@ -56,7 +56,7 @@ def _matrix_to_cell_data(
 def process_excel(
         source: Union[str, bytes, BinaryIO],
         merge_action: MergeAction = MergeAction.FILL_FORWARD,
-        chunk_strategy: str = "fixed_row",
+        chunk_strategy: Union[str, ChunkStrategy] = ChunkStrategy.FIXED_ROW,
         chunk_size: int = 50,
         max_tokens: int = 2000,
         max_rows: int = 100000,
@@ -71,7 +71,7 @@ def process_excel(
 
     :param source:                  输入源，支持本地路径(str)、字节流(bytes)或二进制IO对象
     :param merge_action:            合并单元格处理策略，默认 FILL_FORWARD
-    :param chunk_strategy:          切片策略，"fixed_row"(默认) 或 "token_limit"
+    :param chunk_strategy:          切片策略，ChunkStrategy.FIXED_ROW(默认) 或 ChunkStrategy.TOKEN_LIMIT，也接受等价字符串
     :param chunk_size:              fixed_row 策略下每块最大行数，默认 50
     :param max_tokens:              token_limit 策略下每块最大 token 数，默认 2000
     :param max_rows:                安全限制：单 Sheet 最大行数，超限抛出 OverDimensionError

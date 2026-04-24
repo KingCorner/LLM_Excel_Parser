@@ -5,10 +5,12 @@
 
 import uuid
 import math
-from typing import List, Literal
+from typing import List, Union
 from llm_excel_parser.utils.logger_module import get_logger
 from llm_excel_parser.core.datatypes import StructuredTable, ExcelChunk
+from llm_excel_parser.core.enums import ChunkStrategy
 from llm_excel_parser.core.exceptions import ChunkingError
+from llm_excel_parser.config import default_config
 from llm_excel_parser.strategies.chunking import CHUNKER_REGISTRY
 from llm_excel_parser.utils.formatters import render_chunk_header, build_chunk_context
 
@@ -24,7 +26,7 @@ class ChunkAssembler:
     def execute_chunking(
             cls,
             table: StructuredTable,
-            strategy: Literal["fixed_row", "token_limit"] = "fixed_row",
+            strategy: Union[str, ChunkStrategy] = ChunkStrategy.FIXED_ROW,
             chunk_row_size: int = 50,
             min_tail_rows: int = 10,
             max_tokens: int = 2000
@@ -39,12 +41,18 @@ class ChunkAssembler:
         # 1. 格式化提取 Header 字符串 (依赖 utils 层)
         header_str, header_token_count = render_chunk_header(table)
 
-        # 2. 路由到指定策略执行切片运算 (依赖 strategies 层)
+        # 2. 将字符串归一化为 ChunkStrategy 枚举，统一后续路由逻辑
+        if isinstance(strategy, str):
+            try:
+                strategy = ChunkStrategy(strategy)
+            except ValueError:
+                raise ChunkingError(f"不受支持的切片策略: {strategy!r}")
+
         if strategy not in CHUNKER_REGISTRY:
-            raise ChunkingError(f"不受支持的切片策略: {strategy}")
+            raise ChunkingError(f"不受支持的切片策略: {strategy!r}")
 
         # 根据选择实例化对应的 Chunker，并将对应的参数带入
-        if strategy == "fixed_row":
+        if strategy == ChunkStrategy.FIXED_ROW:
             chunker = CHUNKER_REGISTRY[strategy](chunk_size=chunk_row_size, min_tail_rows=min_tail_rows)
         else:
             chunker = CHUNKER_REGISTRY[strategy](max_tokens=max_tokens)
@@ -76,8 +84,8 @@ class ChunkAssembler:
                     "total_chunks": total_chunks,
                     "start_row": batch[0]["row"],
                     "end_row": batch[-1]["row"],
-                    "strategy": strategy,
-                    "approx_tokens": math.ceil(len(final_context) * 0.5)
+                    "strategy": strategy.value,
+                    "approx_tokens": math.ceil(len(final_context) * default_config.TOKEN_CONVERSION_RATIO)
                 },
                 formatted_context=final_context,
                 raw_data=batch

@@ -7,6 +7,7 @@ import math
 import datetime
 from typing import Any, Dict, List
 from llm_excel_parser.core.datatypes import StructuredTable
+from llm_excel_parser.config import default_config
 
 
 def format_cell_value(value: Any) -> Any:
@@ -61,7 +62,7 @@ def rows_dict_to_markdown_table(rows_dict: Dict[int, Dict[int, Any]], scan_indic
         # 遍历列宽，缺失的列填充空字符串
         # 使用全角 "｜" 替换半角 "|"，防止单元格自带的管道符破坏 Markdown 渲染表格结构
         row_vals = [
-            str(row.get(c, {}).get("value", "")).replace("|", "｜")
+            str(row.get(c, {}).get("value", "")).replace("|", default_config.MARKDOWN_PIPE_ESCAPE)
             for c in range(1, max_col + 1)
         ]
 
@@ -81,7 +82,7 @@ def render_chunk_header(table: StructuredTable) -> tuple[str, int]:
         row_items = [str(h_data.get(c, "")) for c in range(1, table.max_col + 1)]
         header_str_lines.append("表头 | " + " | ".join(row_items))
     final_header_str = "\n".join(header_str_lines)
-    base_tokens = math.ceil(len(final_header_str) * 0.5) + 50
+    base_tokens = math.ceil(len(final_header_str) * default_config.TOKEN_CONVERSION_RATIO) + default_config.HEADER_BASE_TOKENS
     return final_header_str, base_tokens
 
 
@@ -90,7 +91,7 @@ def render_chunk_row(row_record: Dict, max_col: int) -> str:
     r_idx = row_record["row"]
     r_data = row_record["data"]
     # 替换其中的换行等可能破坏Markdown表格的字符
-    row_vals = [str(r_data.get(c, "")).replace("\n", " ").replace("|", "｜") for c in range(1, max_col + 1)]
+    row_vals = [str(r_data.get(c, "")).replace("\n", " ").replace("|", default_config.MARKDOWN_PIPE_ESCAPE) for c in range(1, max_col + 1)]
     return f"行{r_idx} | " + " | ".join(row_vals)
 
 
@@ -108,9 +109,9 @@ def build_chunk_context(
         f"=== 电子表格数据片段 ({current_chunk_idx}/{total_chunks}) ===",
         f"📌 文件名: {table.filename} | 工作表: {table.sheetname}",
         f"📌 行号范围: {start_row} ~ {end_row}",
-        "-" * 50,
+        "-" * default_config.SEPARATOR_WIDTH,
         header_str,  # 每一块均带上表头
-        "-" * 50
+        "-" * default_config.SEPARATOR_WIDTH
     ]
     for row_record in batch:
         context_parts.append(render_chunk_row(row_record, table.max_col))

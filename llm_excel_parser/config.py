@@ -27,6 +27,19 @@ class GlobalConfig:
     MAX_ROW_LIMIT: int = 100000
     MAX_COL_LIMIT: int = 1000
 
+    # Phase 5: 切片默认参数
+    DEFAULT_CHUNK_SIZE: int = 50        # fixed_row 策略默认每块行数
+    DEFAULT_MIN_TAIL_ROWS: int = 10     # 尾部碎片合并阈值
+    DEFAULT_MAX_TOKENS: int = 2000      # token_limit 策略默认每块 Token 上限
+
+    # Token 估算配置
+    TOKEN_CONVERSION_RATIO: float = 0.5  # 字符数 → Token 数的换算系数 (经验值)
+    HEADER_BASE_TOKENS: int = 50         # 表头基础 Token 占用 (保守预留)
+
+    # 格式化输出配置
+    SEPARATOR_WIDTH: int = 50            # 上下文分隔线字符重复次数
+    MARKDOWN_PIPE_ESCAPE: str = "｜"    # 单元格内容中 "|" 的全角替换字符
+
     # LLM 交互配置
     # 调用 LLM 的默认最大重试次数
     LLM_MAX_RETRIES: int = 3

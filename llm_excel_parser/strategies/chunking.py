@@ -5,8 +5,10 @@
 
 import math
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import Dict, List, Any, Type
 from llm_excel_parser.core.datatypes import StructuredTable
+from llm_excel_parser.core.enums import ChunkStrategy
+from llm_excel_parser.config import default_config
 from llm_excel_parser.utils.logger_module import get_logger
 from llm_excel_parser.utils.formatters import render_chunk_row
 
@@ -23,7 +25,8 @@ class BaseChunker(ABC):
 class FixedRowChunker(BaseChunker):
     """策略A: 基于固定行数的切片策略（包含尾部碎片合并）"""
 
-    def __init__(self, chunk_size: int = 50, min_tail_rows: int = 10):
+    def __init__(self, chunk_size: int = default_config.DEFAULT_CHUNK_SIZE,
+                 min_tail_rows: int = default_config.DEFAULT_MIN_TAIL_ROWS):
         self.chunk_size = chunk_size
         self.min_tail_rows = min_tail_rows
 
@@ -46,7 +49,7 @@ class FixedRowChunker(BaseChunker):
 class TokenChunker(BaseChunker):
     """策略B: 基于Token长度的智能切片策略"""
 
-    def __init__(self, max_tokens: int = 2000):
+    def __init__(self, max_tokens: int = default_config.DEFAULT_MAX_TOKENS):
         self.max_tokens = max_tokens
 
     def split(self, table: StructuredTable, base_tokens: int = 0, **kwargs) -> List[List[Dict[str, Any]]]:
@@ -57,7 +60,7 @@ class TokenChunker(BaseChunker):
         for row_record in table.body_rows:
             # 依赖注入：调用 formatter 估算单行的 Token
             row_str = render_chunk_row(row_record, table.max_col)
-            row_tokens = math.ceil(len(row_str) * 0.5)
+            row_tokens = math.ceil(len(row_str) * default_config.TOKEN_CONVERSION_RATIO)
 
             if current_tokens + row_tokens > self.max_tokens and current_batch:
                 batches.append(current_batch)
@@ -73,8 +76,8 @@ class TokenChunker(BaseChunker):
         return batches
 
 
-# 策略工厂映射表，便于 Phase 5 动态调用
-CHUNKER_REGISTRY = {
-    "fixed_row": FixedRowChunker,
-    "token_limit": TokenChunker
+# 策略工厂映射表，以 ChunkStrategy 枚举为 key，便于 Phase 5 动态调用
+CHUNKER_REGISTRY: Dict[ChunkStrategy, Type[BaseChunker]] = {
+    ChunkStrategy.FIXED_ROW: FixedRowChunker,
+    ChunkStrategy.TOKEN_LIMIT: TokenChunker,
 }
