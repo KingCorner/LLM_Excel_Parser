@@ -54,6 +54,10 @@ class DataRenderer:
                         max_row < box.min_row or min_row > box.max_row:
                     continue
 
+                # 主格在隐藏行/列时跳过，防止隐藏值通过策略渗入可见从格
+                if ignore_hidden and (ws.is_row_hidden(min_row) or ws.is_col_hidden(min_col)):
+                    continue
+
                 # 提取主格原值
                 master_val = format_cell_value(ws.get_cell_value(min_row, min_col))
 
