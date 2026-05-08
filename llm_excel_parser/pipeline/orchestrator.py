@@ -16,6 +16,7 @@ from llm_excel_parser.pipeline.phase2_detector import StructureDetector
 from llm_excel_parser.pipeline.phase3_renderer import DataRenderer
 from llm_excel_parser.pipeline.phase4_header import HeaderAnalyzer
 from llm_excel_parser.pipeline.phase5_chunker import ChunkAssembler
+from llm_excel_parser.utils.concurrency import LLMServiceWrapper
 
 logger = get_logger("orchestrator")
 
@@ -84,6 +85,12 @@ def process_excel(
     """
     source_name = source if isinstance(source, str) else f"BinaryStream({type(source).__name__})"
     logger.info(f"=== 启动Excel处理流：{source_name} ===")
+
+    # 当 LLM 分析器开启时，将用户传入的裸服务自动包装，
+    # 透明注入重试、超时阻断能力（库方责任，用户无需手动处理）。
+    if use_llm_layout_analyzer and llm_service is not None:
+        if not isinstance(llm_service, LLMServiceWrapper):
+            llm_service = LLMServiceWrapper(llm_service)
 
     filename = os.path.basename(source) if isinstance(source, str) else "stream_input_excel"
     ignore_hidden = not include_hidden_rows

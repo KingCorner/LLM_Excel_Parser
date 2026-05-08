@@ -7,10 +7,13 @@
 from .core.datatypes import BoundingBox, ExcelChunk, StructuredTable
 
 # 2. 暴露核心枚举类
-from .core.enums import MergeAction
+from .core.enums import MergeAction, ChunkStrategy
 
 # 3. 暴露 LLM 接口协议（方便用户实现并传入自己的 LLM 客户端）
 from .core.interfaces import LLMServiceProtocol
+
+# 4a. 暴露并发包装器（用户将自己的 LLMService 传入后可获得重试/超时/批并发能力）
+from .utils.concurrency import LLMServiceWrapper
 
 # 4. 暴露流水线总控制器的顶级执行函数
 from .pipeline.orchestrator import process_excel
@@ -34,10 +37,12 @@ __all__ = [
 
     # 数据协议与枚举
     "MergeAction",
+    "ChunkStrategy",
     "BoundingBox",
     "ExcelChunk",
     "StructuredTable",
     "LLMServiceProtocol",
+    "LLMServiceWrapper",
 
     # 错误异常类
     "ExcelParserBaseException",

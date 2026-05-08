@@ -11,6 +11,7 @@ from llm_excel_parser.core.datatypes import BoundingBox, StructuredTable, ExcelC
 from llm_excel_parser.core.interfaces import BaseWorksheet
 from llm_excel_parser.core.enums import MergeAction
 from llm_excel_parser.pipeline.orchestrator import _matrix_to_cell_data, process_excel
+from llm_excel_parser.utils.concurrency import LLMServiceWrapper
 
 
 # ========== 辅助工厂 ==========
@@ -349,14 +350,27 @@ class TestProcessExcel:
         assert config["max_cols"] == 100
         assert config["include_hidden_rows"] is True
 
-    def test_llm_service_forwarded_to_header_analyzer(self, mock_pipeline):
-        """llm_service 和 use_llm_layout_analyzer 应透传到 Phase 4"""
+    def test_llm_service_auto_wrapped_and_forwarded(self, mock_pipeline):
+        """裸 llm_service 应被自动包装为 LLMServiceWrapper 后再传入 Phase 4"""
         mock_llm = MagicMock()
         process_excel("workbook.xlsx", use_llm_layout_analyzer=True, llm_service=mock_llm)
 
         _, kwargs = mock_pipeline["header"].call_args
         assert kwargs.get("use_llm_layout_analyzer") is True
-        assert kwargs.get("llm_service") is mock_llm
+
+        wrapped = kwargs.get("llm_service")
+        assert isinstance(wrapped, LLMServiceWrapper), "应为 LLMServiceWrapper 实例"
+        assert wrapped._service is mock_llm, "包装器应持有原始 service"
+
+    def test_already_wrapped_llm_service_not_double_wrapped(self, mock_pipeline):
+        """已被包装过的 LLMServiceWrapper 不应再次嵌套包装"""
+        mock_llm = MagicMock()
+        pre_wrapped = LLMServiceWrapper(mock_llm)
+        process_excel("workbook.xlsx", use_llm_layout_analyzer=True, llm_service=pre_wrapped)
+
+        _, kwargs = mock_pipeline["header"].call_args
+        forwarded = kwargs.get("llm_service")
+        assert forwarded is pre_wrapped, "已包装的 service 应原样传入，不应二次包装"
 
     def test_custom_keywords_forwarded_to_header_analyzer(self, mock_pipeline):
         """custom_header_keywords 应透传到 Phase 4"""
