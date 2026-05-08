@@ -119,6 +119,7 @@ class XlsToXlsxConverter:
         try:
             import xlrd
             from openpyxl import Workbook
+            from openpyxl.utils import get_column_letter
         except ImportError as e:
             raise MissingDependencyError(
                 "处理 .xls 文件需要同时安装 'xlrd' 和 'openpyxl' (pip install xlrd openpyxl)") from e
@@ -135,8 +136,10 @@ class XlsToXlsxConverter:
         for xls_sheet in xls_workbook.sheets():
             ws = mem_wb.create_sheet(title=xls_sheet.name)
 
-            if xls_sheet.visibility != 0:
+            if xls_sheet.visibility == 1:
                 ws.sheet_state = 'hidden'
+            elif xls_sheet.visibility == 2:
+                ws.sheet_state = 'veryHidden'
 
             hidden_rows_idx = set()
             for row_idx in range(xls_sheet.nrows):
@@ -176,6 +179,15 @@ class XlsToXlsxConverter:
                     ws.cell(row=current_xlsx_row, column=col + 1, value=cell_val)
 
                 current_xlsx_row += 1
+
+            hidden_cols_count = 0
+            for col_idx in range(xls_sheet.ncols):
+                col_info = xls_sheet.colinfo_map.get(col_idx)
+                if col_info and getattr(col_info, 'hidden', False):
+                    ws.column_dimensions[get_column_letter(col_idx + 1)].hidden = True
+                    hidden_cols_count += 1
+            if hidden_cols_count:
+                logger.debug(f"Sheet '{xls_sheet.name}' 检测到 {hidden_cols_count} 隐藏列。")
 
             try:
                 for min_row, max_row, min_col, max_col in xls_sheet.merged_cells:

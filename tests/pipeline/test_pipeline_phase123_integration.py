@@ -226,3 +226,100 @@ def test_phase2_includes_hidden_rows_and_cols_when_flag_false(workbook_with_hidd
     # 所有行列均纳入，包围盒应覆盖 1~3 行、1~3 列
     assert box.min_row == 1 and box.max_row == 3
     assert box.min_col == 1 and box.max_col == 3
+
+
+# ===== Phase 3: 隐藏主格合并区域的值隔离测试 =====
+
+@pytest.fixture
+def workbook_hidden_row_master_merge(tmp_path):
+    """
+    行1隐藏（主格 A1="HIDDEN_MASTER"，与 A2 合并），行2可见（从格），行3可见独立格 A3="VISIBLE"
+    用于验证隐藏行主格的值不应通过策略渗入可见从格 A2
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "HiddenRowMasterTest"
+    ws['A1'] = "HIDDEN_MASTER"
+    ws.merge_cells('A1:A2')
+    ws['A3'] = "VISIBLE"
+    ws.row_dimensions[1].hidden = True
+    filepath = tmp_path / "hidden_row_master_merge.xlsx"
+    wb.save(filepath)
+    return str(filepath)
+
+
+@pytest.fixture
+def workbook_hidden_col_master_merge(tmp_path):
+    """
+    列A隐藏（主格 A1="HIDDEN_MASTER"，与 B1 合并），列B可见（从格），行2两列均可见
+    用于验证隐藏列主格的值不应通过策略渗入可见从格 B1
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "HiddenColMasterTest"
+    ws['A1'] = "HIDDEN_MASTER"
+    ws.merge_cells('A1:B1')
+    ws['A2'] = "VA2"
+    ws['B2'] = "VB2"
+    ws.column_dimensions['A'].hidden = True
+    filepath = tmp_path / "hidden_col_master_merge.xlsx"
+    wb.save(filepath)
+    return str(filepath)
+
+
+def test_phase3_hidden_row_master_no_value_leak(workbook_hidden_row_master_merge):
+    """ignore_hidden=True 时，隐藏行主格的值不应通过 FILL_FORWARD 渗入可见从格"""
+    worksheets = SecureLoader.check_dimensions_and_route(workbook_hidden_row_master_merge)
+    ws = worksheets[0]
+
+    boxes = StructureDetector.detect_tables(ws, ignore_hidden=True)
+    assert len(boxes) == 1
+    box = boxes[0]
+
+    rendered = DataRenderer.render_box(ws, box, action=MergeAction.FILL_FORWARD, ignore_hidden=True)
+
+    # 可见行: row2(从格), row3; 只有 A 列
+    assert len(rendered) == 2
+    # row2 从格：主格在隐藏行，应为空而非 "HIDDEN_MASTER"
+    assert rendered[0][0] != "HIDDEN_MASTER", "隐藏行主格的值不应渗入可见从格"
+    assert rendered[0][0] is None or rendered[0][0] == ""
+    # row3 独立格
+    assert rendered[1][0] == "VISIBLE"
+
+
+def test_phase3_hidden_col_master_no_value_leak(workbook_hidden_col_master_merge):
+    """ignore_hidden=True 时，隐藏列主格的值不应通过 FILL_FORWARD 渗入可见从格"""
+    worksheets = SecureLoader.check_dimensions_and_route(workbook_hidden_col_master_merge)
+    ws = worksheets[0]
+
+    boxes = StructureDetector.detect_tables(ws, ignore_hidden=True)
+    assert len(boxes) == 1
+    box = boxes[0]
+
+    rendered = DataRenderer.render_box(ws, box, action=MergeAction.FILL_FORWARD, ignore_hidden=True)
+
+    # 可见列: col B(2); 可见行: row1, row2
+    assert len(rendered) == 2
+    # row1 B1 从格：主格在隐藏列 A，应为空
+    assert rendered[0][0] != "HIDDEN_MASTER", "隐藏列主格的值不应渗入可见从格"
+    assert rendered[0][0] is None or rendered[0][0] == ""
+    # row2 B2 独立格
+    assert rendered[1][0] == "VB2"
+
+
+def test_phase3_hidden_master_included_when_not_ignoring(workbook_hidden_row_master_merge):
+    """ignore_hidden=False 时，隐藏主格的值正常通过策略传播到从格"""
+    worksheets = SecureLoader.check_dimensions_and_route(workbook_hidden_row_master_merge)
+    ws = worksheets[0]
+
+    boxes = StructureDetector.detect_tables(ws, ignore_hidden=False)
+    assert len(boxes) == 1
+    box = boxes[0]
+
+    rendered = DataRenderer.render_box(ws, box, action=MergeAction.FILL_FORWARD, ignore_hidden=False)
+
+    # ignore_hidden=False: 行1(主格)+行2(从格)+行3；FILL_FORWARD 应将 "HIDDEN_MASTER" 传播到 A2
+    assert len(rendered) == 3
+    assert rendered[0][0] == "HIDDEN_MASTER"   # A1 主格
+    assert rendered[1][0] == "HIDDEN_MASTER"   # A2 从格（FILL_FORWARD）
+    assert rendered[2][0] == "VISIBLE"         # A3 独立格
