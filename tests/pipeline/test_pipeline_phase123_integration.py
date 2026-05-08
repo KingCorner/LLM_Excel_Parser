@@ -120,3 +120,109 @@ def test_main_pipeline_happy_path(complex_excel_file):
     assert rendered_table_2 == expected_table_2, "Phase 3: 偏移表格内容提取错误"
 
     print("\n[✔] 流水线 Phase 1 -> Phase 2 -> Phase 3 贯通集成测试全部通过！")
+
+
+# ===== Phase 1.3: 隐藏工作表过滤测试 =====
+
+@pytest.fixture
+def workbook_with_hidden_sheet(tmp_path):
+    """生成一个包含 1 张可见 Sheet 和 1 张隐藏 Sheet 的 xlsx 文件"""
+    wb = openpyxl.Workbook()
+
+    visible_ws = wb.active
+    visible_ws.title = "Visible"
+    visible_ws['A1'] = "可见内容"
+
+    hidden_ws = wb.create_sheet(title="Hidden")
+    hidden_ws.sheet_state = 'hidden'
+    hidden_ws['A1'] = "隐藏内容"
+
+    filepath = tmp_path / "hidden_sheet_test.xlsx"
+    wb.save(filepath)
+    return str(filepath)
+
+
+def test_hidden_sheet_filtered_by_default(workbook_with_hidden_sheet):
+    """默认情况下隐藏工作表应被过滤，只返回可见 Sheet"""
+    worksheets = SecureLoader.check_dimensions_and_route(workbook_with_hidden_sheet)
+
+    assert len(worksheets) == 1
+    assert worksheets[0].title == "Visible"
+
+
+def test_hidden_sheet_included_when_flag_true(workbook_with_hidden_sheet):
+    """include_hidden_sheets=True 时隐藏工作表应被纳入"""
+    worksheets = SecureLoader.check_dimensions_and_route(
+        workbook_with_hidden_sheet,
+        config_params={"include_hidden_sheets": True}
+    )
+
+    assert len(worksheets) == 2
+    titles = {ws.title for ws in worksheets}
+    assert titles == {"Visible", "Hidden"}
+
+
+# ===== Phase 2: 隐藏行/列对结构探测的影响 =====
+
+@pytest.fixture
+def workbook_with_hidden_row_col(tmp_path):
+    """
+    生成一个包含隐藏行/列的 xlsx。
+    布局：
+      行1: A1=标题A  B1=标题B  C1=标题C
+      行2: A2=数据1  B2=数据2  C2=数据3  ← 整行隐藏
+      行3: A3=数据4  B3=数据5  C3=数据6
+    列B整列隐藏。
+
+    ignore_hidden=True 时，Phase 2 布尔矩阵只应看到：
+      可见行 1, 3；可见列 A(1), C(3)
+    → 仍是一个连通块，但列坐标只有 1 和 3
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "HiddenRowCol"
+
+    for r in range(1, 4):
+        ws.cell(row=r, column=1, value=f"A{r}")
+        ws.cell(row=r, column=2, value=f"B{r}")
+        ws.cell(row=r, column=3, value=f"C{r}")
+
+    ws.row_dimensions[2].hidden = True
+    ws.column_dimensions['B'].hidden = True
+
+    filepath = tmp_path / "hidden_row_col_test.xlsx"
+    wb.save(filepath)
+    return str(filepath)
+
+
+def test_phase2_excludes_hidden_rows_and_cols(workbook_with_hidden_row_col):
+    """ignore_hidden=True 时，Phase 2 的布尔矩阵不应纳入隐藏行/列的单元格"""
+    worksheets = SecureLoader.check_dimensions_and_route(workbook_with_hidden_row_col)
+    ws = worksheets[0]
+
+    boxes = StructureDetector.detect_tables(ws, ignore_hidden=True)
+
+    assert len(boxes) == 1, "可见单元格应归并为一个连通块"
+    box = boxes[0]
+
+    # 隐藏行 2 应不在范围内（行范围应为 1~3，但行2本身被跳过）
+    # 连通域包围盒涵盖 row 1 和 row 3，所以 min_row=1, max_row=3
+    assert box.min_row == 1
+    assert box.max_row == 3
+    # 隐藏列 B(2) 应不在范围内，只有列 A(1) 和 C(3)
+    assert box.min_col == 1
+    assert box.max_col == 3
+
+
+def test_phase2_includes_hidden_rows_and_cols_when_flag_false(workbook_with_hidden_row_col):
+    """ignore_hidden=False 时，隐藏行/列的单元格应被纳入布尔矩阵"""
+    worksheets = SecureLoader.check_dimensions_and_route(workbook_with_hidden_row_col)
+    ws = worksheets[0]
+
+    boxes = StructureDetector.detect_tables(ws, ignore_hidden=False)
+
+    assert len(boxes) == 1
+    box = boxes[0]
+    # 所有行列均纳入，包围盒应覆盖 1~3 行、1~3 列
+    assert box.min_row == 1 and box.max_row == 3
+    assert box.min_col == 1 and box.max_col == 3

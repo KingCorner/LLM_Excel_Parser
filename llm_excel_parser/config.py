@@ -27,6 +27,10 @@ class GlobalConfig:
     MAX_ROW_LIMIT: int = 100000
     MAX_COL_LIMIT: int = 1000
 
+    # Phase 1: 隐藏元素过滤默认值
+    INCLUDE_HIDDEN_SHEETS: bool = False   # 默认跳过隐藏工作表
+    INCLUDE_HIDDEN_ROWS: bool = False     # 默认跳过隐藏行/列
+
     # Phase 5: 切片默认参数
     DEFAULT_CHUNK_SIZE: int = 50        # fixed_row 策略默认每块行数
     DEFAULT_MIN_TAIL_ROWS: int = 10     # 尾部碎片合并阈值
