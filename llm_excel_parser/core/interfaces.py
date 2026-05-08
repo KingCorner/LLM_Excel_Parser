@@ -3,7 +3,7 @@
 #   @Time:     2026/4/16 17:37
 #   @FileRole: 核心接口定义
 
-from typing import Protocol, Any, Dict, Tuple, List, Iterator, TYPE_CHECKING
+from typing import Protocol, Any, Tuple, List, Iterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from llm_excel_parser.core.datatypes import CellStyle
@@ -11,18 +11,21 @@ from abc import ABC, abstractmethod
 
 
 class LLMServiceProtocol(Protocol):
-    """大模型服务调用协议接口"""
+    """
+    大模型服务调用协议接口
 
-    def generate(self, prompt: str, **kwargs) -> str:
-        """同步调用生成文本"""
-        ...
+    调用方（用户）只需实现 chat() 方法，负责：
+      - 构造 prompt 并请求大模型
+      - 负载均衡（如多 API Key 轮询）
 
-    async def async_generate(self, prompt: str, **kwargs) -> str:
-        """异步调用生成文本"""
-        ...
+    库方通过 LLMServiceWrapper 统一接管：
+      - 错误重试（指数退避）
+      - 超时阻断
+      - 并发批处理
+    """
 
-    def analyze_structure(self, content: Dict[str, Any]) -> Dict[str, Any]:
-        """针对结构化数据的特定分析调用"""
+    def chat(self, prompt: str, **kwargs) -> str:
+        """同步调用大模型，返回文本响应"""
         ...
 
 
