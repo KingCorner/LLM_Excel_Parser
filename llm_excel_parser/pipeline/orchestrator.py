@@ -62,6 +62,7 @@ def process_excel(
         max_tokens: int = 2000,
         max_rows: int = 100000,
         max_cols: int = 2000,
+        include_hidden_sheets: bool = False,
         include_hidden_rows: bool = False,
         use_llm_layout_analyzer: bool = False,
         llm_service: Optional[Any] = None,
@@ -77,7 +78,8 @@ def process_excel(
     :param max_tokens:              token_limit 策略下每块最大 token 数，默认 2000
     :param max_rows:                安全限制：单 Sheet 最大行数，超限抛出 OverDimensionError
     :param max_cols:                安全限制：单 Sheet 最大列数，超限抛出 OverDimensionError
-    :param include_hidden_rows:     是否纳入隐藏行，默认 False
+    :param include_hidden_sheets:   是否纳入隐藏工作表，默认 False
+    :param include_hidden_rows:     是否纳入隐藏行/列，默认 False
     :param use_llm_layout_analyzer: 是否启用 LLM 兜底表头分析，需配合 llm_service 使用
     :param llm_service:             实现 LLMServiceProtocol 的服务实例
     :param custom_header_keywords:  用于表头匹配的自定义关键词列表
@@ -98,6 +100,7 @@ def process_excel(
     loader_config = {
         "max_rows": max_rows,
         "max_cols": max_cols,
+        "include_hidden_sheets": include_hidden_sheets,
         "include_hidden_rows": include_hidden_rows,
     }
 
@@ -110,7 +113,7 @@ def process_excel(
         sheetname = ws.title
 
         # Phase 2: 结构探测与区块划分 → List[BoundingBox]
-        boxes = StructureDetector.detect_tables(ws)
+        boxes = StructureDetector.detect_tables(ws, ignore_hidden=ignore_hidden)
         if not boxes:
             logger.debug(f"Sheet '{sheetname}' 内未检测到有效数据，已跳过。")
             continue

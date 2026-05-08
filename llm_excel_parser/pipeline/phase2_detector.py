@@ -19,7 +19,8 @@ class StructureDetector:
 
     @classmethod
     def detect_tables(cls, ws, max_empty_rows: int = default_config.DETECT_MAX_EMPTY_ROWS,
-                      max_empty_cols: int = default_config.DETECT_MAX_EMPTY_COLS) -> List[BoundingBox]:
+                      max_empty_cols: int = default_config.DETECT_MAX_EMPTY_COLS,
+                      ignore_hidden: bool = True) -> List[BoundingBox]:
         """
         核心切表编排逻辑：映射布尔矩阵 -> 连通域探测(调用算法层) -> 膨胀合并(调用算法层)
         返回单张Sheet中的多个独立表格区域 (BoundingBox)
@@ -33,7 +34,7 @@ class StructureDetector:
                 return []
 
             # 步骤 1 & 2: 构建稀疏布尔矩阵并进行合并格修补 (强依赖 ws 业务逻辑，保留在此处)
-            solid_cells = cls._build_boolean_matrix(ws, max_row, max_col)
+            solid_cells = cls._build_boolean_matrix(ws, max_row, max_col, ignore_hidden)
             if not solid_cells:
                 return []
 
@@ -56,21 +57,37 @@ class StructureDetector:
             raise StructureDetectionError(f"Phase 2 结构探测异常: Sheet '{ws.title}' 探测失败. 具体原因: {str(e)}") from e
 
     @staticmethod
-    def _build_boolean_matrix(ws, max_row: int, max_col: int) -> Set[Tuple[int, int]]:
+    def _build_boolean_matrix(ws, max_row: int, max_col: int,
+                               ignore_hidden: bool = True) -> Set[Tuple[int, int]]:
         """获取具有实际展示意义的单元格坐标集合 (强依赖 Excel 解析逻辑)"""
         solid_cells = set()
 
-        # 1. 扫描值
+        # 预计算隐藏行/列集合，避免在双重循环内重复调用适配器
+        hidden_rows: Set[int] = set()
+        hidden_cols: Set[int] = set()
+        if ignore_hidden:
+            hidden_rows = {r for r in range(1, max_row + 1) if ws.is_row_hidden(r)}
+            hidden_cols = {c for c in range(1, max_col + 1) if ws.is_col_hidden(c)}
+
+        # 1. 扫描值（跳过隐藏行/列）
         for row_idx, row in enumerate(
                 ws.iter_rows(min_row=1, max_row=max_row, min_col=1, max_col=max_col), 1):
+            if ignore_hidden and row_idx in hidden_rows:
+                continue
             for col_idx, val in enumerate(row, 1):
+                if ignore_hidden and col_idx in hidden_cols:
+                    continue
                 if val is not None and str(val).strip() != "":
                     solid_cells.add((row_idx, col_idx))
 
-        # 2. 合并单元格修补
-        for min_row, min_col, max_row, max_col in ws.get_merged_regions():
-            for r in range(min_row, max_row + 1):
-                for c in range(min_col, max_col + 1):
+        # 2. 合并单元格修补（同样跳过隐藏行/列，保证布尔矩阵与 Phase 3 渲染结果一致）
+        for min_row, min_col, max_row_m, max_col_m in ws.get_merged_regions():
+            for r in range(min_row, max_row_m + 1):
+                if ignore_hidden and r in hidden_rows:
+                    continue
+                for c in range(min_col, max_col_m + 1):
+                    if ignore_hidden and c in hidden_cols:
+                        continue
                     solid_cells.add((r, c))
 
         return solid_cells

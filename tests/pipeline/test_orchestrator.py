@@ -341,14 +341,24 @@ class TestProcessExcel:
         assert kwargs.get("max_tokens") == 500
 
     def test_loader_config_includes_security_limits(self, mock_pipeline):
-        """max_rows / max_cols / include_hidden_rows 应传入 Phase 1 配置"""
-        process_excel("workbook.xlsx", max_rows=5000, max_cols=100, include_hidden_rows=True)
+        """max_rows / max_cols / include_hidden_rows / include_hidden_sheets 应传入 Phase 1 配置"""
+        process_excel("workbook.xlsx", max_rows=5000, max_cols=100,
+                      include_hidden_rows=True, include_hidden_sheets=True)
 
         _, kwargs = mock_pipeline["loader"].call_args
         config = kwargs.get("loader_config") or mock_pipeline["loader"].call_args[0][1]
         assert config["max_rows"] == 5000
         assert config["max_cols"] == 100
         assert config["include_hidden_rows"] is True
+        assert config["include_hidden_sheets"] is True
+
+    def test_loader_config_hidden_sheets_defaults_false(self, mock_pipeline):
+        """include_hidden_sheets 默认值应为 False"""
+        process_excel("workbook.xlsx")
+
+        _, kwargs = mock_pipeline["loader"].call_args
+        config = kwargs.get("loader_config") or mock_pipeline["loader"].call_args[0][1]
+        assert config["include_hidden_sheets"] is False
 
     def test_llm_service_auto_wrapped_and_forwarded(self, mock_pipeline):
         """裸 llm_service 应被自动包装为 LLMServiceWrapper 后再传入 Phase 4"""

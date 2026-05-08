@@ -217,7 +217,9 @@ class SecureLoader:
         config_params = config_params or {}
         max_rows = config_params.get("max_rows", default_config.MAX_ROW_LIMIT)
         max_cols = config_params.get("max_cols", default_config.MAX_COL_LIMIT)
-        include_hidden = config_params.get("include_hidden_rows", False)
+        include_hidden_rows = config_params.get("include_hidden_rows", default_config.INCLUDE_HIDDEN_ROWS)
+        include_hidden_sheets = config_params.get("include_hidden_sheets", default_config.INCLUDE_HIDDEN_SHEETS)
+
         fmt, file_obj = FileFormatSniffer.detect_and_normalize(source)
         if fmt == ExcelFormat.UNKNOWN:
             raise UnsupportedFormatError("未知的表格格式，仅支持xls和xlsx(以及二进制流)")
@@ -236,13 +238,21 @@ class SecureLoader:
                 wb_obj = load_workbook(file_obj, data_only=True)
             else:
                 logger.info("启动 XLS 内存转换流水线...")
-                wb_obj = XlsToXlsxConverter.convert_in_memory(file_obj.read(), include_hidden)
+                wb_obj = XlsToXlsxConverter.convert_in_memory(file_obj.read(), include_hidden_rows)
         except ExcelParserBaseException:
-            # 如果是自己定义的异常，直接上抛
             raise
         except Exception as e:
-            # 门面模式的防漏处理：兜底第三方引擎自身的异常 (如 zipfile.BadZipFile, openpyxl的各种解析报错)
             raise FileCorruptedError(f"文件加载失败，无法解析底层工作簿: {str(e)}") from e
-        # 不再对外返回openpyxl对象, 而是返回BaseWorksheet数组
+
         from llm_excel_parser.adapters.openpyxl_adapter import OpenpyxlWorksheetAdapter
-        return [OpenpyxlWorksheetAdapter(sheet) for sheet in wb_obj.worksheets]
+        sheets = []
+        for sheet in wb_obj.worksheets:
+            # Phase 1.3: 根据配置决定是否跳过隐藏工作表
+            if not include_hidden_sheets and sheet.sheet_state != 'visible':
+                logger.debug(f"跳过隐藏工作表: '{sheet.title}' (state={sheet.sheet_state})")
+                continue
+            sheets.append(OpenpyxlWorksheetAdapter(sheet))
+
+        logger.info(f"Phase 1 完成，共加载 {len(sheets)} 张工作表"
+                    + ("（含隐藏）" if include_hidden_sheets else "（隐藏已过滤）"))
+        return sheets
