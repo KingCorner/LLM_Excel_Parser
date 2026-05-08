@@ -1,19 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "llm-excel-parser"
 version = "0.1.0"
-description = "Add your description here"
+description = "An Excel parsing library designed for LLM scenarios. Intelligently slices .xlsx/.xls files into structured, context-rich ExcelChunk objects, ready to feed into any LLM."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
+authors = [
+    { name = "KingCorner" },
+]
+keywords = [
+    "excel", "xlsx", "xls", "llm", "rag",
+    "parser", "chunking", "table", "extraction", "openpyxl",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing",
+    "Topic :: Office/Business :: Financial :: Spreadsheet",
+]
+
+# 运行时只需要 openpyxl；xlrd 是处理 .xls 的可选依赖
 dependencies = [
-    "openai>=2.31.0",
     "openpyxl>=3.1.5",
+]
+
+[project.optional-dependencies]
+# pip install "llm-excel-parser[xls]"
+xls = [
+    "xlrd>=2.0.2",
+]
+# pip install "llm-excel-parser[dev]"
+dev = [
+    "xlrd>=2.0.2",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
-    "xlrd>=2.0.2",
 ]
 
+[project.urls]
+"Homepage" = "https://github.com/KingCorner/LLM_Excel_Parser"
+"Source" = "https://github.com/KingCorner/LLM_Excel_Parser"
+"Bug Tracker" = "https://github.com/KingCorner/LLM_Excel_Parser/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["llm_excel_parser"]
+
 [tool.pytest.ini_options]
-pythonpath = [
-    "."
-]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["llm_excel_parser"]
+omit = ["tests/*"]
