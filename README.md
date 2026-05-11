@@ -1,6 +1,6 @@
-# llm-excel-parser
+# LLM-Excel-Parser
 
-**llm-excel-parser** 是一个专为大语言模型（LLM）场景设计的 Python Excel 解析库。它能将 `.xlsx` / `.xls` 文件智能解析、切片，输出结构化、带上下文的 `ExcelChunk` 列表，可直接作为 prompt 喂给任何 LLM。
+**LLM-Excel-Parser** 是一个专为大语言模型（LLM）场景设计的 Python Excel 解析库。它能将 `.xlsx` / `.xls` 文件智能解析、切片，输出结构化、带上下文的 `ExcelChunk` 列表，可直接作为 prompt 喂给任何 LLM。
 
 ---
 
